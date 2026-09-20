@@ -60,6 +60,7 @@ export interface ShipmentItem {
   skuId: string;
   skuName: string;
   quantity: number;
+  receivedQuantity?: number;
 }
 
 export interface Shipment {

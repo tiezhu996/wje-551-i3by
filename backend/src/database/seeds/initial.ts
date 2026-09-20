@@ -98,7 +98,7 @@ export const shipments: Shipment[] = Array.from({ length: 15 }, (_, index) => {
     items: [
       { id: uuid(), shipmentId: id, skuId: `SKU-${String(1000 + (index % 10))}`, skuName: '轴承组件', quantity: 10 + index },
       { id: uuid(), shipmentId: id, skuId: `SKU-${String(1010 + (index % 10))}`, skuName: '包装纸箱', quantity: 20 + index },
-    ],
+    ].map((item) => (status === ShipmentStatus.DELIVERED ? { ...item, receivedQuantity: item.quantity } : item)),
     timeline: [{ id: uuid(), status, operator: '系统种子', note: '初始化运单状态', createdAt }],
     createdAt,
     updatedAt: createdAt,

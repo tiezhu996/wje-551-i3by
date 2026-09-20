@@ -15,7 +15,7 @@ const status = ref('');
 onMounted(() => store.fetchList());
 async function reload() { await store.fetchList({ orderNo: orderNo.value, status: status.value }); }
 async function ship(id: string) { await shipmentsApi.ship(id, { trackingNo: `TRK${Date.now()}`, carrier: '顺丰速运' }); await reload(); }
-async function receive(id: string) { await shipmentsApi.receive(id); await reload(); }
+async function receive(row: any) { await shipmentsApi.receive(row.id, { items: (row.items ?? []).map((item: any) => ({ itemId: item.id, receivedQuantity: item.quantity })) }); await reload(); }
 async function exception(id: string) { await shipmentsApi.exception(id, '人工标记异常'); await reload(); }
 </script>
 
@@ -33,7 +33,7 @@ async function exception(id: string) { await shipmentsApi.exception(id, '人工�
       <template #actions="{ row }">
         <RouterLink class="link" :to="`/shipments/${row.id}`">详情</RouterLink>
         <button v-if="row.status === ShipmentStatus.PENDING" v-permission="PERMISSIONS.SHIPMENT_WRITE" class="mini" @click="ship(row.id)">发货</button>
-        <button v-if="row.status === ShipmentStatus.IN_TRANSIT" v-permission="PERMISSIONS.SHIPMENT_RECEIVE" class="mini" @click="receive(row.id)">签收</button>
+        <button v-if="row.status === ShipmentStatus.IN_TRANSIT" v-permission="PERMISSIONS.SHIPMENT_RECEIVE" class="mini" @click="receive(row)">签收</button>
         <button v-if="![ShipmentStatus.DELIVERED, ShipmentStatus.CANCELLED].includes(row.status)" v-permission="PERMISSIONS.SHIPMENT_WRITE" class="mini" @click="exception(row.id)">异常</button>
       </template>
     </DataTable>
