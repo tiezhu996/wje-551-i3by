@@ -1,7 +1,7 @@
 import { v4 as uuid } from 'uuid';
 import { ShipmentStatus, SupplierStatus } from '../constants/enums.js';
 import { shipments, suppliers, warehouses } from '../database/seeds/initial.js';
-import type { Shipment, User } from '../types/index.js';
+import type { ReceiveItemInput, Shipment, ShipmentItem, User } from '../types/index.js';
 import { auditService } from './audit.service.js';
 import { inventoryService } from './inventory.service.js';
 import { BusinessException } from '../utils/response.js';
@@ -12,6 +12,8 @@ function nextOrderNo() {
 }
 
 export class ShipmentsService {
+  private readonly receivingIds = new Set<string>();
+
   list(query: Record<string, string | undefined>) {
     return shipments
       .filter((item) => !query.orderNo || item.orderNo.includes(query.orderNo))
@@ -68,11 +70,44 @@ export class ShipmentsService {
     return this.transition(this.requireStatus(id, [ShipmentStatus.SHIPPED, ShipmentStatus.EXCEPTION]), ShipmentStatus.IN_TRANSIT, '在途更新', user);
   }
 
-  receive(id: string, user?: User) {
-    const shipment = this.requireStatus(id, [ShipmentStatus.IN_TRANSIT]);
+  receive(id: string, payload: { items?: ReceiveItemInput[] }, user?: User) {
+    const shipment = shipments.find((item) => item.id === id);
+    if (!shipment) throw new BusinessException(404, '运单不存在');
+    if (shipment.status === ShipmentStatus.DELIVERED) throw new BusinessException(400, '运单已签收，请勿重复提交');
+    if (![ShipmentStatus.IN_TRANSIT, ShipmentStatus.EXCEPTION].includes(shipment.status)) {
+      throw new BusinessException(400, `当前状态${shipment.status}不允许该操作`);
+    }
+    if (this.receivingIds.has(id)) throw new BusinessException(409, '该运单正在签收处理中，请勿重复提交');
+    this.receivingIds.add(id);
+    try {
+      return this.settleReceipt(shipment, payload?.items ?? [], user);
+    } finally {
+      this.receivingIds.delete(id);
+    }
+  }
+
+  private settleReceipt(shipment: Shipment, inputs: ReceiveItemInput[], user?: User) {
+    const rows = shipment.items.map((item) => {
+      const input = inputs.find((entry) => entry.itemId === item.id);
+      const quantity = input?.receivedQuantity;
+      const valid = quantity !== undefined && quantity !== null && Number.isInteger(quantity) && quantity >= 0;
+      return { item, received: valid ? Number(quantity) : undefined, valid };
+    });
+    rows.forEach((row) => { row.item.receivedQuantity = row.received; });
+    const mismatches = rows.filter((row) => !row.valid || row.received !== row.item.quantity);
+    if (mismatches.length > 0) {
+      const note = `签收差异：${mismatches.map((row) => this.describeDiff(row.item, row.received, row.valid)).join('；')}`;
+      shipment.remark = note;
+      return this.transition(shipment, ShipmentStatus.EXCEPTION, note, user);
+    }
     shipment.items.forEach((item) => inventoryService.inbound({ warehouseId: shipment.warehouseId, skuId: item.skuId, skuName: item.skuName, quantity: item.quantity }, user));
     shipment.actualArrival = new Date().toISOString();
     return this.transition(shipment, ShipmentStatus.DELIVERED, '签收并自动入库', user);
+  }
+
+  private describeDiff(item: ShipmentItem, received: number | undefined, valid: boolean) {
+    if (!valid) return `${item.skuName}(${item.skuId})实收缺失或无效，应到${item.quantity}`;
+    return `${item.skuName}(${item.skuId})应到${item.quantity}，实收${received}，差异${(received ?? 0) - item.quantity}`;
   }
 
   exception(id: string, reason: string, user?: User) {

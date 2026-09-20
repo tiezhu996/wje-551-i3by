@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
-import { RouterLink } from 'vue-router';
+import { RouterLink, useRouter } from 'vue-router';
 import { shipmentsApi } from '../api/shipments';
 import DataTable from '../components/common/DataTable.vue';
 import StatusBadge from '../components/common/StatusBadge.vue';
@@ -10,12 +10,13 @@ import { useShipmentStore } from '../stores/shipmentStore';
 import { formatDate } from '../utils/format';
 
 const store = useShipmentStore();
+const router = useRouter();
 const orderNo = ref('');
 const status = ref('');
 onMounted(() => store.fetchList());
 async function reload() { await store.fetchList({ orderNo: orderNo.value, status: status.value }); }
 async function ship(id: string) { await shipmentsApi.ship(id, { trackingNo: `TRK${Date.now()}`, carrier: '顺丰速运' }); await reload(); }
-async function receive(id: string) { await shipmentsApi.receive(id); await reload(); }
+function receive(id: string) { router.push(`/shipments/${id}`); }
 async function exception(id: string) { await shipmentsApi.exception(id, '人工标记异常'); await reload(); }
 </script>
 

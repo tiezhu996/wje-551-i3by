@@ -1,5 +1,5 @@
 import { request } from './request';
-import type { Shipment } from '../types/shipment';
+import type { ReceiveItemInput, Shipment } from '../types/shipment';
 
 export const shipmentsApi = {
   list: (params?: Record<string, string>) => request.get<Shipment[]>('/shipments', { params }),
@@ -7,7 +7,7 @@ export const shipmentsApi = {
   create: (payload: Partial<Shipment>) => request.post<Shipment>('/shipments', payload),
   ship: (id: string, payload: { trackingNo: string; carrier: string }) => request.post(`/shipments/${id}/ship`, payload),
   transit: (id: string) => request.post(`/shipments/${id}/transit`),
-  receive: (id: string) => request.post(`/shipments/${id}/receive`),
+  receive: (id: string, payload: { items: ReceiveItemInput[] }) => request.post<Shipment>(`/shipments/${id}/receive`, payload),
   exception: (id: string, reason: string) => request.post(`/shipments/${id}/exception`, { reason }),
   cancel: (id: string) => request.post(`/shipments/${id}/cancel`),
 };
